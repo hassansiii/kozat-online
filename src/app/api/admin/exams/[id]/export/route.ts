@@ -12,6 +12,12 @@ function formatResult(score: number | null, maxScore: number | null) {
   return `${score} / ${maxScore}`;
 }
 
+function studyTypeLabel(studyType: "MORNING" | "EVENING" | null | undefined) {
+  if (studyType === "MORNING") return "صباحي";
+  if (studyType === "EVENING") return "مسائي";
+  return "—";
+}
+
 export async function GET(_req: Request, ctx: Ctx) {
   try {
     const admin = await requireUser({ role: "ADMIN" });
@@ -27,6 +33,7 @@ export async function GET(_req: Request, ctx: Ctx) {
                 id: true,
                 fullName: true,
                 department: true,
+                studyType: true,
               },
             },
           },
@@ -38,6 +45,7 @@ export async function GET(_req: Request, ctx: Ctx) {
                 id: true,
                 fullName: true,
                 department: true,
+                studyType: true,
               },
             },
           },
@@ -49,6 +57,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     type Row = {
       fullName: string;
       department: string;
+      studyType: string;
       result: string;
     };
 
@@ -58,6 +67,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       byStudent.set(a.student.id, {
         fullName: a.student.fullName,
         department: a.student.department || "—",
+        studyType: studyTypeLabel(a.student.studyType),
         result: "—",
       });
     }
@@ -69,6 +79,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       byStudent.set(attempt.studentId, {
         fullName: attempt.student.fullName,
         department: attempt.student.department || "—",
+        studyType: studyTypeLabel(attempt.student.studyType),
         result: submitted
           ? formatResult(attempt.score, attempt.maxScore)
           : "—",
@@ -87,20 +98,20 @@ export async function GET(_req: Request, ctx: Ctx) {
       views: [{ rightToLeft: true, state: "frozen", ySplit: 3 }],
     });
 
-    sheet.mergeCells("A1:D1");
+    sheet.mergeCells("A1:E1");
     const titleCell = sheet.getCell("A1");
     titleCell.value = `نتائج الاختبار: ${exam.title}`;
     titleCell.font = { bold: true, size: 16, color: { argb: "FF0F3D32" } };
     titleCell.alignment = { horizontal: "right", vertical: "middle" };
     sheet.getRow(1).height = 28;
 
-    sheet.mergeCells("A2:D2");
+    sheet.mergeCells("A2:E2");
     const metaCell = sheet.getCell("A2");
     metaCell.value = `تاريخ التصدير: ${new Date().toLocaleString("ar-IQ")}`;
     metaCell.font = { size: 11, color: { argb: "FF666666" } };
     metaCell.alignment = { horizontal: "right", vertical: "middle" };
 
-    const headers = ["ت", "اسم الطالب", "القسم", "النتيجة"];
+    const headers = ["ت", "اسم الطالب", "القسم", "نوع الدراسة", "النتيجة"];
     const headerRow = sheet.getRow(3);
     headers.forEach((h, i) => {
       const cell = headerRow.getCell(i + 1);
@@ -123,12 +134,18 @@ export async function GET(_req: Request, ctx: Ctx) {
 
     rows.forEach((r, idx) => {
       const row = sheet.getRow(idx + 4);
-      const values = [idx + 1, r.fullName, r.department, r.result];
+      const values = [
+        idx + 1,
+        r.fullName,
+        r.department,
+        r.studyType,
+        r.result,
+      ];
       values.forEach((v, i) => {
         const cell = row.getCell(i + 1);
         cell.value = v;
         cell.alignment = {
-          horizontal: i === 0 || i === 3 ? "center" : "right",
+          horizontal: i === 0 || i === 3 || i === 4 ? "center" : "right",
           vertical: "middle",
         };
         cell.font = { size: 11 };
@@ -151,7 +168,8 @@ export async function GET(_req: Request, ctx: Ctx) {
     sheet.getColumn(1).width = 8;
     sheet.getColumn(2).width = 36;
     sheet.getColumn(3).width = 24;
-    sheet.getColumn(4).width = 16;
+    sheet.getColumn(4).width = 14;
+    sheet.getColumn(5).width = 16;
 
     const buffer = await workbook.xlsx.writeBuffer();
     const bytes = Buffer.from(buffer);
