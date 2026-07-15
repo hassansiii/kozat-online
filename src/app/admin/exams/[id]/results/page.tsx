@@ -20,7 +20,12 @@ type Attempt = {
     department: string | null;
     studyType: "MORNING" | "EVENING" | null;
   };
-  violations: Array<{ id: string; type: string; detail: string | null; createdAt: string }>;
+  violations: Array<{
+    id: string;
+    type: string;
+    detail: string | null;
+    createdAt: string;
+  }>;
 };
 
 export default function ExamResultsPage() {
@@ -29,7 +34,7 @@ export default function ExamResultsPage() {
   const { t, lang } = usePrefs();
   const [examTitle, setExamTitle] = useState("");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -41,29 +46,29 @@ export default function ExamResultsPage() {
       });
   }, [id]);
 
-  async function downloadPdf() {
-    setPdfLoading(true);
+  async function downloadExcel() {
+    setExportLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/exams/${id}/export-pdf`);
+      const res = await fetch(`/api/admin/exams/${id}/export`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "تعذر تحميل PDF");
+        setError(data.error || "تعذر تحميل ملف Excel");
         return;
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `results-${id}.pdf`;
+      a.download = `نتائج-${examTitle || id}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError("تعذر تحميل ملف PDF");
+      setError("تعذر تحميل ملف Excel");
     } finally {
-      setPdfLoading(false);
+      setExportLoading(false);
     }
   }
 
@@ -78,23 +83,17 @@ export default function ExamResultsPage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={downloadPdf}
-            disabled={pdfLoading}
+            onClick={downloadExcel}
+            disabled={exportLoading}
           >
-            {pdfLoading
+            {exportLoading
               ? lang === "en"
                 ? "Downloading…"
                 : "جارٍ التحميل…"
               : lang === "en"
-                ? "Export PDF"
-                : "تصدير PDF"}
+                ? "Export Excel"
+                : "تصدير Excel"}
           </button>
-          <a
-            href={`/api/admin/exams/${id}/export`}
-            className="btn btn-secondary"
-          >
-            {lang === "en" ? "Export CSV" : "تصدير CSV"}
-          </a>
           <Link href={`/admin/exams/${id}/live`} className="btn btn-ghost">
             {lang === "en" ? "Live" : "مراقبة"}
           </Link>
@@ -141,8 +140,10 @@ export default function ExamResultsPage() {
             </div>
             <p className="mt-2 text-xs text-[var(--muted)]">
               {t("started")}: {formatDate(a.startedAt, lang)} — {t("submitted")}:{" "}
-              {a.submittedAt ? formatDate(a.submittedAt, lang) : t("notSubmittedYet")} —{" "}
-              {t("status")}: {a.status}
+              {a.submittedAt
+                ? formatDate(a.submittedAt, lang)
+                : t("notSubmittedYet")}{" "}
+              — {t("status")}: {a.status}
             </p>
             {a.violations.length > 0 && (
               <ul className="mt-2 space-y-1 text-xs text-[var(--danger)]">

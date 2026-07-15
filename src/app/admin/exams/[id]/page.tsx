@@ -63,31 +63,31 @@ export default function ExamManagePage() {
     { text: "", isCorrect: false },
   ]);
 
-  const [pdfLoading, setPdfLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
-  async function downloadPdf() {
-    setPdfLoading(true);
+  async function downloadExcel() {
+    setExportLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/admin/exams/${id}/export-pdf`);
+      const res = await fetch(`/api/admin/exams/${id}/export`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error || "تعذر تحميل PDF");
+        setError(data.error || "تعذر تحميل ملف Excel");
         return;
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `results-${id}.pdf`;
+      a.download = `نتائج-${exam?.title || id}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch {
-      setError("تعذر تحميل ملف PDF");
+      setError("تعذر تحميل ملف Excel");
     } finally {
-      setPdfLoading(false);
+      setExportLoading(false);
     }
   }
 
@@ -283,16 +283,16 @@ export default function ExamManagePage() {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={downloadPdf}
-            disabled={pdfLoading}
+            onClick={downloadExcel}
+            disabled={exportLoading}
           >
-            {pdfLoading
+            {exportLoading
               ? lang === "en"
                 ? "Downloading…"
                 : "جارٍ التحميل…"
               : lang === "en"
-                ? "PDF results"
-                : "نتائج PDF"}
+                ? "Export Excel"
+                : "تصدير Excel"}
           </button>
           {exam.status !== "PUBLISHED" && (
             <button className="btn btn-primary" onClick={publish}>
