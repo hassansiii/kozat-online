@@ -27,9 +27,22 @@ type Exam = {
   durationMinutes: number;
   maxViolations: number;
   totalScore: number;
+  passingScore: number;
+  startsAt: string | null;
+  endsAt: string | null;
+  department: string | null;
+  studyType: "MORNING" | "EVENING" | null;
   questions: Question[];
   assignments: Array<{ student: Student }>;
 };
+
+function toLocalInput(value: string | null | undefined) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 export default function ExamManagePage() {
   const params = useParams();
@@ -49,6 +62,34 @@ export default function ExamManagePage() {
     { text: "", isCorrect: false },
     { text: "", isCorrect: false },
   ]);
+
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function downloadPdf() {
+    setPdfLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/exams/${id}/export-pdf`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "تعذر تحميل PDF");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `results-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("تعذر تحميل ملف PDF");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   async function load() {
     const [examRes, studentsRes] = await Promise.all([
@@ -179,7 +220,14 @@ export default function ExamManagePage() {
         description: exam.description,
         durationMinutes: exam.durationMinutes,
         totalScore: exam.totalScore,
+        passingScore: exam.passingScore,
         maxViolations: exam.maxViolations,
+        startsAt: exam.startsAt
+          ? new Date(exam.startsAt).toISOString()
+          : null,
+        endsAt: exam.endsAt ? new Date(exam.endsAt).toISOString() : null,
+        department: exam.department || null,
+        studyType: exam.studyType || null,
       }),
     });
     if (!res.ok) {
@@ -222,19 +270,30 @@ export default function ExamManagePage() {
             {exam.maxViolations}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <a href="#exam-settings" className="btn btn-secondary">
+            {lang === "en" ? "Edit basic info" : "تعديل المعلومات الأساسية"}
+          </a>
           <Link href={`/admin/exams/${id}/live`} className="btn btn-ghost">
             {lang === "en" ? "Live" : "مراقبة"}
           </Link>
           <Link href={`/admin/exams/${id}/results`} className="btn btn-ghost">
             {t("results")}
           </Link>
-          <a
-            href={`/api/admin/exams/${id}/export-pdf`}
+          <button
+            type="button"
             className="btn btn-primary"
+            onClick={downloadPdf}
+            disabled={pdfLoading}
           >
-            {lang === "en" ? "PDF results" : "نتائج PDF"}
-          </a>
+            {pdfLoading
+              ? lang === "en"
+                ? "Downloading…"
+                : "جارٍ التحميل…"
+              : lang === "en"
+                ? "PDF results"
+                : "نتائج PDF"}
+          </button>
           {exam.status !== "PUBLISHED" && (
             <button className="btn btn-primary" onClick={publish}>
               {t("publishExam")}
@@ -258,9 +317,9 @@ export default function ExamManagePage() {
         </div>
       </div>
 
-      <section className="card space-y-3 p-5">
+      <section id="exam-settings" className="card scroll-mt-24 space-y-3 p-5">
         <h2 className="font-bold">
-          {lang === "en" ? "Edit exam settings" : "تعديل إعدادات الاختبار"}
+          {lang === "en" ? "Basic exam information" : "المعلومات الأساسية للاختبار"}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="field">
@@ -303,6 +362,18 @@ export default function ExamManagePage() {
             />
           </div>
           <div className="field">
+            <label>{lang === "en" ? "Passing score %" : "درجة النجاح %"}</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={exam.passingScore}
+              onChange={(e) =>
+                setExam({ ...exam, passingScore: Number(e.target.value) })
+              }
+            />
+          </div>
+          <div className="field">
             <label>{t("maxViolations")}</label>
             <input
               type="number"
@@ -312,6 +383,69 @@ export default function ExamManagePage() {
                 setExam({ ...exam, maxViolations: Number(e.target.value) })
               }
             />
+          </div>
+          <div className="field">
+            <label>{t("startsAt")}</label>
+            <input
+              type="datetime-local"
+              value={toLocalInput(exam.startsAt)}
+              onChange={(e) =>
+                setExam({
+                  ...exam,
+                  startsAt: e.target.value
+                    ? new Date(e.target.value).toISOString()
+                    : null,
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>{t("endsAt")}</label>
+            <input
+              type="datetime-local"
+              value={toLocalInput(exam.endsAt)}
+              onChange={(e) =>
+                setExam({
+                  ...exam,
+                  endsAt: e.target.value
+                    ? new Date(e.target.value).toISOString()
+                    : null,
+                })
+              }
+            />
+          </div>
+          <div className="field">
+            <label>{t("departmentOptional")}</label>
+            <input
+              value={exam.department || ""}
+              onChange={(e) =>
+                setExam({ ...exam, department: e.target.value || null })
+              }
+              placeholder={t("departmentPlaceholder")}
+            />
+          </div>
+          <div className="field">
+            <label>{t("studyType")}</label>
+            <select
+              value={exam.studyType || ""}
+              onChange={(e) =>
+                setExam({
+                  ...exam,
+                  studyType: (e.target.value || null) as
+                    | "MORNING"
+                    | "EVENING"
+                    | null,
+                })
+              }
+            >
+              <option value="">—</option>
+              <option value="MORNING">
+                {lang === "en" ? "Morning" : "صباحي"}
+              </option>
+              <option value="EVENING">
+                {lang === "en" ? "Evening" : "مسائي"}
+              </option>
+            </select>
           </div>
         </div>
         <div className="field">
@@ -354,13 +488,20 @@ export default function ExamManagePage() {
       )}
 
       <section className="card space-y-4 p-5">
-        <h2 className="font-bold">
-          {editingId
-            ? lang === "en"
-              ? "Edit question"
-              : "تعديل السؤال"
-            : t("addQuestion")}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-bold">
+            {editingId
+              ? lang === "en"
+                ? "Edit question"
+                : "تعديل السؤال"
+              : t("addQuestion")}
+          </h2>
+          <a href="#exam-settings" className="btn btn-ghost text-sm">
+            {lang === "en"
+              ? "← Back to basic info"
+              : "→ رجوع للمعلومات الأساسية"}
+          </a>
+        </div>
         <form onSubmit={addQuestion} className="space-y-3">
           <div className="field">
             <label>{t("questionText")}</label>

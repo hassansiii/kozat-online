@@ -74,13 +74,15 @@ export async function GET(_req: Request, ctx: Ctx) {
     const safeName = exam.title
       .replace(/[^\w\u0600-\u06FF\-]+/g, "_")
       .slice(0, 40);
-    const filename = `results-${safeName || id}.pdf`;
+    const filenameAscii = `exam-${id}-results.pdf`;
+    const filenameUtf8 = `results-${safeName || id}.pdf`;
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Content-Disposition": `attachment; filename="${filenameAscii}"; filename*=UTF-8''${encodeURIComponent(filenameUtf8)}`,
         "Cache-Control": "no-store",
+        "Content-Length": String(pdf.length),
       },
     });
   } catch (error) {

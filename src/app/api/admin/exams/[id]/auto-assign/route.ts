@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { notifyUser } from "@/lib/notifications";
 import { jsonError } from "@/lib/utils";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -32,7 +31,6 @@ export async function POST(_req: Request, ctx: Ctx) {
       select: { id: true },
     });
 
-    // إن لم يُسجَّل أحد باسم هذا الدكتور، نرجع لتعيين حسب القسم/نوع الدراسة
     if (students.length === 0) {
       students = await prisma.user.findMany({
         where: baseWhere,
@@ -40,28 +38,41 @@ export async function POST(_req: Request, ctx: Ctx) {
       });
     }
 
-    let added = 0;
-    for (const s of students) {
-      try {
-        await prisma.examAssignment.create({
-          data: { examId: id, studentId: s.id },
-        });
-        await notifyUser(
-          s.id,
-          "تم تعيين اختبار لك",
-          `تم تعيين اختبار «${exam.title}» لك.`,
-          "/student/exams"
-        );
-        added += 1;
-      } catch {
-        // already assigned
-      }
+    if (students.length === 0) {
+      return NextResponse.json({
+        added: 0,
+        totalMatched: 0,
+        message: "لا يوجد طلاب مطابقون للتعيين",
+      });
+    }
+
+    const existing = await prisma.examAssignment.findMany({
+      where: { examId: id },
+      select: { studentId: true },
+    });
+    const already = new Set(existing.map((e) => e.studentId));
+    const toAdd = students.filter((s) => !already.has(s.id));
+
+    if (toAdd.length > 0) {
+      await prisma.examAssignment.createMany({
+        data: toAdd.map((s) => ({ examId: id, studentId: s.id })),
+        skipDuplicates: true,
+      });
+
+      await prisma.notification.createMany({
+        data: toAdd.map((s) => ({
+          userId: s.id,
+          title: "تم تعيين اختبار لك",
+          message: `تم تعيين اختبار «${exam.title}» لك.`,
+          link: "/student/exams",
+        })),
+      });
     }
 
     return NextResponse.json({
-      added,
+      added: toAdd.length,
       totalMatched: students.length,
-      message: `تم تعيين ${added} طالب تلقائياً`,
+      message: `تم تعيين ${toAdd.length} طالب تلقائياً`,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "";

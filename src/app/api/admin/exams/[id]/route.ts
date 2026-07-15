@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
-import { notifyUser } from "@/lib/notifications";
 import { jsonError } from "@/lib/utils";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -106,23 +105,39 @@ export async function PATCH(req: Request, ctx: Ctx) {
     });
 
     if (data.assignStudentIds) {
-      await prisma.examAssignment.deleteMany({ where: { examId: id } });
-      if (data.assignStudentIds.length > 0) {
+      const desired = Array.from(new Set(data.assignStudentIds));
+      const existing = await prisma.examAssignment.findMany({
+        where: { examId: id },
+        select: { studentId: true },
+      });
+      const existingIds = new Set(existing.map((e) => e.studentId));
+      const desiredSet = new Set(desired);
+
+      const toRemove = existing
+        .map((e) => e.studentId)
+        .filter((sid) => !desiredSet.has(sid));
+      const toAdd = desired.filter((sid) => !existingIds.has(sid));
+
+      if (toRemove.length > 0) {
+        await prisma.examAssignment.deleteMany({
+          where: { examId: id, studentId: { in: toRemove } },
+        });
+      }
+
+      if (toAdd.length > 0) {
         await prisma.examAssignment.createMany({
-          data: data.assignStudentIds.map((studentId) => ({
-            examId: id,
-            studentId,
-          })),
+          data: toAdd.map((studentId) => ({ examId: id, studentId })),
+          skipDuplicates: true,
         });
 
-        for (const studentId of data.assignStudentIds) {
-          await notifyUser(
-            studentId,
-            "تم تعيين اختبار لك",
-            `تم تعيين اختبار «${exam.title}» لك.`,
-            "/student/exams"
-          );
-        }
+        await prisma.notification.createMany({
+          data: toAdd.map((studentId) => ({
+            userId: studentId,
+            title: "تم تعيين اختبار لك",
+            message: `تم تعيين اختبار «${exam.title}» لك.`,
+            link: "/student/exams",
+          })),
+        });
       }
     }
 

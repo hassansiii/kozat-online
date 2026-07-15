@@ -367,18 +367,32 @@ export default function ExamTakePage() {
           <div className="flex gap-2">
             <button
               className="btn btn-secondary"
-              disabled={index === 0}
+              disabled={index === 0 || submitting}
               onClick={() => setIndex((i) => i - 1)}
             >
               السابق
             </button>
-            <button
-              className="btn btn-secondary"
-              disabled={index >= data.questions.length - 1}
-              onClick={() => setIndex((i) => i + 1)}
-            >
-              التالي
-            </button>
+            {index >= data.questions.length - 1 ? (
+              <button
+                className="btn btn-primary"
+                disabled={submitting}
+                onClick={() => {
+                  if (confirm("هذا آخر سؤال. هل تريد تسليم الاختبار الآن؟")) {
+                    submitExam("manual");
+                  }
+                }}
+              >
+                {submitting ? "جارٍ التسليم..." : "إنهاء وتسليم الاختبار"}
+              </button>
+            ) : (
+              <button
+                className="btn btn-secondary"
+                disabled={submitting}
+                onClick={() => setIndex((i) => i + 1)}
+              >
+                التالي
+              </button>
+            )}
           </div>
           <button
             className="btn btn-primary"

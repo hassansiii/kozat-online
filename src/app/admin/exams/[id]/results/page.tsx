@@ -29,6 +29,8 @@ export default function ExamResultsPage() {
   const { t, lang } = usePrefs();
   const [examTitle, setExamTitle] = useState("");
   const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch(`/api/admin/exams/${id}/results`)
@@ -39,6 +41,32 @@ export default function ExamResultsPage() {
       });
   }, [id]);
 
+  async function downloadPdf() {
+    setPdfLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/admin/exams/${id}/export-pdf`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "تعذر تحميل PDF");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `results-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("تعذر تحميل ملف PDF");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-5 animate-fade-up">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -47,12 +75,20 @@ export default function ExamResultsPage() {
           <p className="text-sm text-[var(--muted)]">{examTitle}</p>
         </div>
         <div className="flex gap-2">
-          <a
-            href={`/api/admin/exams/${id}/export-pdf`}
+          <button
+            type="button"
             className="btn btn-primary"
+            onClick={downloadPdf}
+            disabled={pdfLoading}
           >
-            {lang === "en" ? "Export PDF" : "تصدير PDF"}
-          </a>
+            {pdfLoading
+              ? lang === "en"
+                ? "Downloading…"
+                : "جارٍ التحميل…"
+              : lang === "en"
+                ? "Export PDF"
+                : "تصدير PDF"}
+          </button>
           <a
             href={`/api/admin/exams/${id}/export`}
             className="btn btn-secondary"
@@ -67,6 +103,17 @@ export default function ExamResultsPage() {
           </Link>
         </div>
       </div>
+
+      {error && (
+        <p
+          className="rounded-xl px-3 py-2 text-sm text-[var(--danger)]"
+          style={{
+            background: "color-mix(in srgb, var(--danger) 12%, transparent)",
+          }}
+        >
+          {error}
+        </p>
+      )}
 
       {attempts.length === 0 && (
         <p className="card p-6 text-[var(--muted)]">{t("noAttempts")}</p>

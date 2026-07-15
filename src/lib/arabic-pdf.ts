@@ -50,7 +50,15 @@ export function prepareArabic(input: string): string {
 }
 
 export function arabicFontPath() {
-  return path.join(process.cwd(), "src", "fonts", "Amiri-Regular.ttf");
+  const candidates = [
+    path.join(process.cwd(), "public", "fonts", "Amiri-Regular.ttf"),
+    path.join(process.cwd(), "src", "fonts", "Amiri-Regular.ttf"),
+  ];
+  const fs = require("fs") as typeof import("fs");
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidates[0];
 }
 
 export type PdfResultRow = {
