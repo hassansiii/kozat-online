@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STUDENT
+}
+
+enum AccountStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StudyType {
+  MORNING
+  EVENING
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  AUTO_SUBMITTED
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  passwordHash     String
+  fullName         String
+  role             Role          @default(STUDENT)
+  status           AccountStatus @default(PENDING)
+  department       String?
+  stage            String?
+  studyType        StudyType?
+  doctorName       String?
+  subjectName      String?
+  resetToken       String?
+  resetTokenExpires DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  examsCreated    Exam[]         @relation("ExamCreator")
+  attempts        Attempt[]
+  notifications   Notification[]
+  assignedExams   ExamAssignment[]
+
+  @@index([role, status])
+  @@index([doctorName])
+}
+
+model Exam {
+  id              String     @id @default(cuid())
+  title           String
+  subjectName     String?
+  description     String?
+  durationMinutes Int
+  startsAt        DateTime?
+  endsAt          DateTime?
+  department      String?
+  studyType       StudyType?
+  status          ExamStatus @default(DRAFT)
+  shuffleQuestions Boolean   @default(true)
+  maxViolations   Int        @default(3)
+  passingScore    Int        @default(50)
+  totalScore      Int        @default(100)
+  createdById     String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  createdBy   User             @relation("ExamCreator", fields: [createdById], references: [id])
+  questions   Question[]
+  attempts    Attempt[]
+  assignments ExamAssignment[]
+}
+
+model ExamAssignment {
+  id        String   @id @default(cuid())
+  examId    String
+  studentId String
+  createdAt DateTime @default(now())
+
+  exam    Exam @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student User @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, studentId])
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  examId    String
+  text      String
+  order     Int      @default(0)
+  points    Int      @default(1)
+  createdAt DateTime @default(now())
+
+  exam     Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  choices  Choice[]
+  answers  Answer[]
+}
+
+model Choice {
+  id         String  @id @default(cuid())
+  questionId String
+  text       String
+  isCorrect  Boolean @default(false)
+  order      Int     @default(0)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  Answer[]
+}
+
+model Attempt {
+  id             String        @id @default(cuid())
+  examId         String
+  studentId      String
+  status         AttemptStatus @default(IN_PROGRESS)
+  startedAt      DateTime      @default(now())
+  endsAt         DateTime
+  submittedAt    DateTime?
+  score          Float?
+  maxScore       Float?
+  violationCount Int           @default(0)
+  questionOrder  String?
+  createdAt      DateTime      @default(now())
+
+  exam       Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers    Answer[]
+  violations Violation[]
+
+  @@unique([examId, studentId])
+  @@index([examId, studentId])
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  attemptId  String
+  questionId String
+  choiceId   String?
+  updatedAt  DateTime @updatedAt
+
+  attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  choice   Choice?  @relation(fields: [choiceId], references: [id])
+
+  @@unique([attemptId, questionId])
+}
+
+model Violation {
+  id        String   @id @default(cuid())
+  attemptId String
+  type      String
+  detail    String?
+  createdAt DateTime @default(now())
+
+  attempt Attempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SiteSettings {
+  id            String   @id @default("default")
+  brandName     String   @default("كوزات أونلاين")
+  homeTag       String   @default("منصة أكاديمية للاختبارات")
+  homeTitle     String   @default("كوزات أونلاين")
+  homeDesc      String   @default("أنشئ حساباً أو سجّل دخولك للبدء. حسابات الطلاب الجديدة تُحفظ تلقائياً وبانتظار موافقة الدكتور.")
+  featuresTitle String   @default("ماذا تقدم المنصة؟")
+  feature1      String   @default("لوحة إدارة للدكتور لإنشاء الكوزات والأسئلة")
+  feature2      String   @default("موافقة على تسجيل الطلاب مع إشعارات فورية")
+  feature3      String   @default("مؤقّت للاختبار وتسليم تلقائي عند انتهاء الوقت")
+  feature4      String   @default("وضع ملء الشاشة وتسجيل مخالفات مغادرة الصفحة")
+  feature5      String   @default("نتائج وإحصائيات لكل محاولة")
+  primaryColor  String   @default("#0d6e5b")
+  primaryDark   String   @default("#0a5546")
+  accentColor   String   @default("#c4a35a")
+  panelFrom     String   @default("#0d6e5b")
+  panelVia      String   @default("#0a5546")
+  panelTo       String   @default("#1a3a32")
+  updatedAt     DateTime @updatedAt
+}
